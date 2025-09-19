@@ -18,9 +18,11 @@ label_counts = {}
 
 if os.path.isfile(DATASET_FILE):
     with open(DATASET_FILE, 'r', newline='') as f:
-        reader = csv.DictReader(f)
+        reader = csv.reader(f)
         for row in reader:
-            lbl = row['label']
+            if not row:
+                continue
+            lbl = row[-1]  # последняя колонка — это label
             label_counts[lbl] = label_counts.get(lbl, 0) + 1
 
 def save_worker():
@@ -31,12 +33,12 @@ def save_worker():
         try:
             img = crop_and_resize(data_url_to_image(data['image']), EXPORT_SIZE)
             arr = 1.0 - (np.array(img, dtype=np.float32) / 255.0)
-            row = [f"{v:.1f}" for v in arr.flatten()] + [data['label']]
-            file_exists = os.path.isfile(DATASET_FILE)
+
+            bin_arr = (arr > 0.5).astype(int)
+            row = [str(v) for v in bin_arr.flatten()] + [data['label']]
+
             with open(DATASET_FILE, 'a', newline='') as f:
                 writer = csv.writer(f)
-                if not file_exists:
-                    writer.writerow([f'p{i}' for i in range(EXPORT_SIZE**2)] + ['label'])
                 writer.writerow(row)
         except Exception as e:
             print("Ошибка сохранения:", e)

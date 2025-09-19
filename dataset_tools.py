@@ -1,68 +1,51 @@
 import csv
-import json
 import numpy as np
-from colorama import init, Style
 
-init()
+FILE = 'dataset.csv'
+SIZE = 28
 
-DATASET_FILE = 'dataset.csv'
-NAMES_FILE = 'settings.json'
-
-def remove_empty_images(file, thr=0.0):
-    import csv, numpy as np
+def clean(file, thr=0.0):
     with open(file) as f:
         h, *d = csv.reader(f)
     d = [r for r in d if not np.all(np.array(r[:-1], float) <= thr)]
     with open(file, 'w', newline='') as f:
         csv.writer(f).writerows([h] + d)
 
-remove_empty_images(DATASET_FILE)
+def block(v):
+    g = int(v * 23) + 232
+    return f"\033[48;5;{g}m   \033[0m"
 
-with open(NAMES_FILE, encoding='utf-8') as f:
-    names_data = json.load(f)
-SIZE = int(names_data.get("size"))
+clean(FILE)
 
-def gray_to_block(val):
-    gray_level = int(val * 23) + 232
-    return f"\033[48;5;{gray_level}m   {Style.RESET_ALL}"
+with open(FILE) as f:
+    r = list(csv.reader(f))
+    head, data = r[0], r[1:]
 
-with open(DATASET_FILE, newline='') as f:
-    reader = csv.reader(f)
-    header = next(reader)
-    data = list(reader)
-
-labels = sorted(set(row[-1] for row in data))
+labels = sorted({row[-1] for row in data})
 print("Доступные метки:")
-for lbl in labels:
-    count = sum(1 for row in data if row[-1] == lbl)
-    print(f"- {lbl} ({count})")
+for l in labels:
+    print(f"- {l} ({sum(row[-1]==l for row in data)})")
 
 choice = input("\nВведите имя метки: ").strip()
+items = [(i, row) for i, row in enumerate(data) if row[-1] == choice]
 
-filtered = [(idx, row) for idx, row in enumerate(data) if row[-1] == choice]
-
-if not filtered:
+if not items:
     print("Нет изображений с такой меткой.")
     exit()
 
-deleted_indices = []
-for idx, row in filtered:
-    pixels = np.array(row[:-1], dtype=float).reshape((SIZE, SIZE))
-    label = row[-1]
-    print(f"\n\033[96mИзображение {idx+1}, метка: {label}{Style.RESET_ALL}")
-    for y in range(SIZE):
-        print(''.join(gray_to_block(p) for p in pixels[y]))
+del_idx = []
+for i, row in items:
+    px = np.array(row[:-1], float).reshape(SIZE, SIZE)
+    print(f"\n\033Изображение {i+1}, метка: {row[-1]}")
+    for y in px:
+        print(''.join(block(p) for p in y))
+    if input("Enter — дальше, 'delete' — удалить: ").strip().lower() == "delete":
+        del_idx.append(i)
 
-    action = input("Нажмите Enter для следующего или введите 'delete' для удаления: ").strip().lower()
-    if action == "delete":
-        deleted_indices.append(idx)
-
-if deleted_indices:
-    data = [row for i, row in enumerate(data) if i not in deleted_indices]
-    with open(DATASET_FILE, 'w', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(header)
-        writer.writerows(data)
-    print(f"Удалено {len(deleted_indices)} примеров.")
+if del_idx:
+    data = [r for j, r in enumerate(data) if j not in del_idx]
+    with open(FILE, 'w', newline='') as f:
+        csv.writer(f).writerows([head] + data)
+    print(f"Удалено {len(del_idx)} примеров.")
 
 print("Готово.")
